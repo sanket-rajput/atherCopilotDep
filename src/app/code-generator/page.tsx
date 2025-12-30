@@ -1,182 +1,222 @@
-'use client'
+'use client';
 
-import { generateCodeSnippet } from '@/ai/flows/voice-activated-code-generation'
-import { PageHeader } from '@/components/page-header'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { useToast } from '@/hooks/use-toast'
-import { Check, Copy, Loader2, Mic, StopCircle } from 'lucide-react'
-import React, { useEffect, useState, useRef } from 'react'
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-const removeMarkdown = (text: string) => {
-  return text.replace(/```[\w-]*\n/g, '').replace(/```/g, '')
-}
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Check,
+  Copy,
+  Loader2,
+  Mic,
+  StopCircle,
+} from 'lucide-react';
+
+import AppLayout from '../app-layout';
+
+import { generateCodeSnippet } from '@/ai/flows/voice-activated-code-generation';
+import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+
+const removeMarkdown = (text: string) =>
+  text.replace(/```[\w-]*\n/g, '').replace(/```/g, '');
 
 export default function CodeGeneratorPage() {
-  const [isListening, setIsListening] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [codeSnippet, setCodeSnippet] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [hasCopied, setHasCopied] = useState(false)
-  const { toast } = useToast()
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [codeSnippet, setCodeSnippet] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const { toast } = useToast();
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  /* 🎙 Speech Recognition Setup */
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined') return;
 
     const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
       toast({
         title: 'Browser Not Supported',
         description:
           'Your browser does not support the Web Speech API. Please try Chrome or Edge.',
         variant: 'destructive',
-      })
-      return
+      });
+      return;
     }
 
-    const recognition = new SpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
-    recognition.onresult = (event) => {
-      let finalTranscript = ''
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript
+          finalTranscript += event.results[i][0].transcript;
         }
       }
-      setTranscript((prev) => prev + finalTranscript)
-    }
-    
-    recognition.onend = () => {
-      setIsListening(false)
-    }
+      setTranscript((prev) => prev + finalTranscript);
+    };
 
-    recognitionRef.current = recognition
-  }, [toast])
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+  }, [toast]);
 
   const toggleListening = () => {
     if (isListening) {
-      recognitionRef.current?.stop()
+      recognitionRef.current?.stop();
     } else {
-      setTranscript('')
-      recognitionRef.current?.start()
+      setTranscript('');
+      recognitionRef.current?.start();
     }
-    setIsListening(!isListening)
-  }
+    setIsListening(!isListening);
+  };
 
   const handleGenerateCode = async () => {
-    if (!transcript) {
+    if (!transcript.trim()) {
       toast({
         title: 'No command provided',
-        description: 'Please say something or type a command to generate code.',
+        description:
+          'Please say something or type a command to generate code.',
         variant: 'destructive',
-      })
-      return
+      });
+      return;
     }
-    setIsLoading(true)
-    setCodeSnippet('')
-    setHasCopied(false)
+
+    setIsLoading(true);
+    setCodeSnippet('');
+    setHasCopied(false);
+
     try {
-      const result = await generateCodeSnippet({ voiceCommand: transcript })
-      setCodeSnippet(removeMarkdown(result.codeSnippet))
+      const result = await generateCodeSnippet({
+        voiceCommand: transcript,
+      });
+      setCodeSnippet(removeMarkdown(result.codeSnippet));
     } catch (error) {
-      console.error(error)
+      console.error(error);
       toast({
         title: 'Error Generating Code',
-        description: 'An unexpected error occurred. Please try again.',
+        description:
+          'An unexpected error occurred. Please try again.',
         variant: 'destructive',
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleCopy = () => {
     if (codeSnippet) {
-      navigator.clipboard.writeText(codeSnippet)
-      setHasCopied(true)
-      toast({ title: 'Code copied to clipboard!' })
-      setTimeout(() => setHasCopied(false), 2000)
+      navigator.clipboard.writeText(codeSnippet);
+      setHasCopied(true);
+      toast({ title: 'Code copied to clipboard!' });
+      setTimeout(() => setHasCopied(false), 2000);
     }
-  }
+  };
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Quantum CodeForge™"
-        description="Generate code snippets using your voice or by typing a command."
-      />
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Command</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Textarea
-              placeholder="e.g., 'Create a React component for a button with a primary style'"
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              className="min-h-[200px] font-body"
-              disabled={isListening}
-            />
-            <div className="flex items-center gap-2">
-              <Button onClick={toggleListening} size="icon" variant={isListening ? 'destructive' : 'outline'}>
-                {isListening ? (
-                  <StopCircle className="animate-pulse" />
-                ) : (
-                  <Mic />
-                )}
-                <span className="sr-only">
-                  {isListening ? 'Stop Listening' : 'Start Listening'}
-                </span>
-              </Button>
-               <Button onClick={handleGenerateCode} disabled={isLoading || !transcript}>
-                {isLoading && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Generate Code
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative">
-          <CardHeader>
-            <CardTitle>Generated Code</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading && (
-               <div className="flex items-center justify-center h-[200px]">
-                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-               </div>
-            )}
-            {codeSnippet && (
-              <pre className="p-4 rounded-md bg-muted text-sm font-code overflow-x-auto">
-                <code>{codeSnippet}</code>
-              </pre>
-            )}
-            {!isLoading && !codeSnippet && (
-              <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">
-                Your generated code will appear here.
+    <AppLayout>
+      <div className="mx-auto max-w-6xl space-y-10">
+        <PageHeader
+          title="Quantum CodeForge™"
+          description="Generate code snippets using your voice or by typing a command."
+        />
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* LEFT: COMMAND INPUT */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Command</CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              <Textarea
+                placeholder="e.g. Create a React button component with a primary variant"
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                className="min-h-[220px] font-body"
+                disabled={isListening}
+              />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={toggleListening}
+                  size="icon"
+                  variant={isListening ? 'destructive' : 'outline'}
+                >
+                  {isListening ? (
+                    <StopCircle className="animate-pulse" />
+                  ) : (
+                    <Mic />
+                  )}
+                </Button>
+
+                <Button
+                  onClick={handleGenerateCode}
+                  disabled={isLoading || !transcript.trim()}
+                >
+                  {isLoading && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Generate Code
+                </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* RIGHT: OUTPUT */}
+          <Card className="relative">
+            <CardHeader>
+              <CardTitle>Generated Code</CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              {isLoading && (
+                <div className="flex h-[220px] items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {codeSnippet && (
+                <pre className="rounded-md bg-muted p-4 text-sm font-code overflow-x-auto">
+                  <code>{codeSnippet}</code>
+                </pre>
+              )}
+
+              {!isLoading && !codeSnippet && (
+                <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                  Your generated code will appear here.
+                </div>
+              )}
+            </CardContent>
+
+            {codeSnippet && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute right-4 top-4 text-muted-foreground"
+                onClick={handleCopy}
+              >
+                {hasCopied ? <Check /> : <Copy />}
+              </Button>
             )}
-          </CardContent>
-           {codeSnippet && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="absolute top-4 right-4 text-muted-foreground"
-              onClick={handleCopy}
-            >
-              {hasCopied ? <Check /> : <Copy />}
-            </Button>
-          )}
-        </Card>
+          </Card>
+        </div>
       </div>
-    </div>
-  )
+    </AppLayout>
+  );
 }

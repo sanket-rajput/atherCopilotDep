@@ -1,17 +1,28 @@
-'use client'
+'use client';
 
+export const dynamic = 'force-dynamic';
+
+import { chatAction } from './actions';
+
+import { useState, useRef, useEffect } from 'react';
 import {
-  intelligentChatMemory,
-} from '@/ai/flows/intelligent-chat-memory'
-import { Logo } from '@/components/logo'
-import { PageHeader } from '@/components/page-header'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useToast } from '@/hooks/use-toast'
-import { cn } from '@/lib/utils'
-import { Loader2, Send, User, Plus, MessageSquare, Trash2 } from 'lucide-react'
-import { useState, useRef, useEffect, useMemo } from 'react'
+  Loader2,
+  Send,
+  User,
+  Plus,
+  MessageSquare,
+  Trash2,
+} from 'lucide-react';
+
+import AppLayout from '../app-layout';
+
+import { Logo } from '@/components/logo';
+import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 import {
   useAuth,
@@ -23,299 +34,283 @@ import {
   addDocumentNonBlocking,
   deleteDocumentNonBlocking,
 } from '@/firebase';
-import { collection, query, orderBy, doc, serverTimestamp } from 'firebase/firestore';
+
+import {
+  collection,
+  query,
+  orderBy,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 type Message = {
-  role: 'user' | 'assistant'
-  content: string
-}
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const { toast } = useToast()
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
   const auth = useAuth();
 
+  /* 🔐 Anonymous login */
   useEffect(() => {
     if (!user && !isUserLoading) {
       initiateAnonymousSignIn(auth);
     }
   }, [user, isUserLoading, auth]);
 
+  /* 📂 Sessions */
   const sessionsQuery = useMemoFirebase(
     () =>
-      user ? query(collection(firestore, `users/${user.uid}/sessions`), orderBy('startTime', 'desc')) : null,
+      user
+        ? query(
+            collection(firestore, `users/${user.uid}/sessions`),
+            orderBy('startTime', 'desc')
+          )
+        : null,
     [firestore, user]
   );
-  const { data: sessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
 
+  const { data: sessions } = useCollection(sessionsQuery);
+
+  /* 💬 Messages */
   const messagesQuery = useMemoFirebase(
     () =>
       user && activeSessionId
-        ? query(collection(firestore, `users/${user.uid}/sessions/${activeSessionId}/messages`), orderBy('createdAt'))
+        ? query(
+            collection(
+              firestore,
+              `users/${user.uid}/sessions/${activeSessionId}/messages`
+            ),
+            orderBy('createdAt')
+          )
         : null,
     [firestore, user, activeSessionId]
   );
-  const { data: firestoreMessages, isLoading: messagesLoading } = useCollection(messagesQuery);
+
+  const { data: firestoreMessages } = useCollection(messagesQuery);
 
   useEffect(() => {
     if (firestoreMessages) {
-      const formattedMessages = firestoreMessages.map(msg => ({
-        role: msg.isUserMessage ? 'user' : 'assistant',
-        content: msg.content
-      }));
-      setMessages(formattedMessages);
+      setMessages(
+        firestoreMessages.map((m) => ({
+          role: m.isUserMessage ? 'user' : 'assistant',
+          content: m.content,
+        }))
+      );
     } else {
       setMessages([]);
     }
   }, [firestoreMessages]);
 
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [messages]);
 
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth',
-      })
-    }
-  }, [messages])
-  
-  useEffect(() => {
-    if (!activeSessionId && sessions && sessions.length > 0) {
+    if (!activeSessionId && sessions?.length) {
       setActiveSessionId(sessions[0].id);
     }
   }, [sessions, activeSessionId]);
 
+  /* ➕ New session */
   const handleNewSession = async () => {
     if (!user) return;
-    const sessionsCollection = collection(firestore, `users/${user.uid}/sessions`);
-    const newSession = {
+    const ref = collection(firestore, `users/${user.uid}/sessions`);
+    const docRef = await addDocumentNonBlocking(ref, {
       startTime: serverTimestamp(),
-      sessionName: `New Chat ${sessions ? sessions.length + 1 : 1}`,
-      userId: user.uid,
-    };
-    const docRef = await addDocumentNonBlocking(sessionsCollection, newSession);
-    if (docRef) {
-      setActiveSessionId(docRef.id);
-    }
+      sessionName: `New Chat ${(sessions?.length ?? 0) + 1}`,
+    });
+    if (docRef) setActiveSessionId(docRef.id);
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
+  /* 🗑 Delete session */
+  const handleDeleteSession = async (id: string) => {
     if (!user) return;
-    const sessionDoc = doc(firestore, `users/${user.uid}/sessions`, sessionId);
-    await deleteDocumentNonBlocking(sessionDoc);
-    if (activeSessionId === sessionId) {
-      setActiveSessionId(null);
-    }
+    await deleteDocumentNonBlocking(
+      doc(firestore, `users/${user.uid}/sessions`, id)
+    );
+    if (id === activeSessionId) setActiveSessionId(null);
   };
 
+  /* ✉ Send message — SERVER ACTION (FINAL FIX) */
   const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading || !user || !activeSessionId) return
+    e.preventDefault();
+    if (!input.trim() || !user || !activeSessionId) return;
 
-    const userMessageContent = input;
-    const userMessageForUI: Message = { role: 'user', content: userMessageContent };
-    setMessages((prev) => [...prev, userMessageForUI]);
-    setInput('')
-    setIsLoading(true)
+    const content = input;
+    setInput('');
+    setIsLoading(true);
 
-    const messagesCollection = collection(firestore, `users/${user.uid}/sessions/${activeSessionId}/messages`);
-    await addDocumentNonBlocking(messagesCollection, {
-      content: userMessageContent,
+    const userMessage: Message = { role: 'user', content };
+    setMessages((prev) => [...prev, userMessage]);
+
+    const ref = collection(
+      firestore,
+      `users/${user.uid}/sessions/${activeSessionId}/messages`
+    );
+
+    await addDocumentNonBlocking(ref, {
+      content,
       isUserMessage: true,
       createdAt: serverTimestamp(),
-      userId: user.uid,
     });
-    
-    try {
-      const chatHistory = [...messages, userMessageForUI].map(
-        (msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })
-      );
 
-      const result = await intelligentChatMemory({
-        message: userMessageContent,
-        chatHistory: chatHistory as { role: 'user' | 'assistant'; content: string }[],
-      })
+    try {
+      const cleanHistory = [...messages, userMessage].map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const result = await chatAction(content, cleanHistory);
 
       const assistantMessage: Message = {
         role: 'assistant',
         content: result.response,
-      }
-      
-      await addDocumentNonBlocking(messagesCollection, {
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      await addDocumentNonBlocking(ref, {
         content: result.response,
         isUserMessage: false,
         createdAt: serverTimestamp(),
-        userId: user.uid
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: 'Chat error',
+        description: err.message || 'AI failed',
+        variant: 'destructive',
       });
 
-    } catch (error) {
-      console.error(error)
-      toast({
-        title: 'Error in Chat',
-        description: 'An unexpected error occurred. Please try again.',
-        variant: 'destructive',
-      })
       setMessages((prev) => prev.slice(0, -1));
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="flex h-[calc(100vh-5rem)]">
-      {/* Sessions Sidebar */}
-      <div className="hidden md:flex flex-col w-64 border-r bg-card/50">
-        <div className="p-4 flex justify-between items-center border-b">
-          <h2 className="text-lg font-semibold">Chat History</h2>
-          <Button variant="ghost" size="icon" onClick={handleNewSession}>
-            <Plus className="h-5 w-5" />
-          </Button>
-        </div>
-        <ScrollArea className="flex-1">
-          {sessionsLoading ? (
-            <div className="p-4 space-y-2">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-10 bg-muted rounded animate-pulse" />
-              ))}
+    <AppLayout>
+      <div className="flex h-full">
+        {/* Sessions */}
+        <aside className="hidden md:flex w-64 border-r bg-card">
+          <div className="flex flex-col w-full">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold">Chat History</h3>
+              <Button size="icon" variant="ghost" onClick={handleNewSession}>
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
-          ) : (
-            <div className="p-2 space-y-1">
-              {sessions?.map(session => (
-                <div
-                  key={session.id}
-                  className={cn(
-                    "group flex items-center justify-between p-2 rounded-md cursor-pointer hover:bg-muted",
-                    activeSessionId === session.id && "bg-muted"
-                  )}
-                  onClick={() => setActiveSessionId(session.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm truncate">{session.sessionName}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteSession(session.id);
-                    }}
+
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-1">
+                {sessions?.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={() => setActiveSessionId(s.id)}
+                    className={cn(
+                      'group flex justify-between px-3 py-2 rounded-md text-sm cursor-pointer',
+                      activeSessionId === s.id
+                        ? 'bg-muted'
+                        : 'hover:bg-muted'
+                    )}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </div>
+                    <span className="truncate flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      {s.sessionName}
+                    </span>
+                    <Trash2
+                      className="h-4 w-4 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSession(s.id);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </aside>
 
-
-      {/* Chat Area */}
-      <div className="flex flex-col flex-1">
-        <div className="border-b p-4">
+        {/* Chat */}
+        <div className="flex flex-col flex-1">
+          <div className="border-b p-4">
             <PageHeader
-                title="Cognitive Memory Core™"
-                description="Engage in a continuous conversation with your AI assistant."
+              title="Cognitive Memory Core™"
+              description="AI chat with persistent memory."
             />
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full" ref={scrollAreaRef}>
-            <div className="p-4 space-y-4">
-              {messagesLoading && messages.length === 0 && (
-                <div className="flex items-center justify-center h-full text-muted-foreground pt-24">
-                  <Loader2 className="h-12 w-12 animate-spin" />
-                </div>
-              )}
+          </div>
 
-              {!messagesLoading && messages.length === 0 && !activeSessionId && (
-                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-24">
-                    <Logo className="h-12 w-12 mb-4" />
-                    <p className="text-lg font-semibold">Start a new conversation</p>
-                    <p>Click the '+' button to begin a new chat session.</p>
-                  </div>
-              )}
-              
-              {!messagesLoading && messages.length === 0 && activeSessionId && (
-                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-24">
-                    <Logo className="h-12 w-12 mb-4" />
-                    <p className="text-lg font-semibold">Start a conversation</p>
-                    <p>Ask me anything!</p>
-                  </div>
-              )}
-
-              {messages.map((message, index) => (
+          <ScrollArea ref={scrollRef} className="flex-1 p-4">
+            <div className="space-y-4">
+              {messages.map((m, i) => (
                 <div
-                  key={index}
+                  key={i}
                   className={cn(
-                    'flex items-start gap-3',
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
+                    'flex gap-3',
+                    m.role === 'user' ? 'justify-end' : 'justify-start'
                   )}
                 >
-                  {message.role === 'assistant' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                      <Logo className="w-5 h-5" />
+                  {m.role === 'assistant' && (
+                    <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                      <Logo className="h-5 w-5" />
                     </div>
                   )}
                   <div
                     className={cn(
-                      'p-3 rounded-lg max-w-sm md:max-w-md lg:max-w-lg',
-                      message.role === 'user'
+                      'px-4 py-2 rounded-lg max-w-lg text-sm',
+                      m.role === 'user'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-muted'
                     )}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {m.content}
                   </div>
-                  {message.role === 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                      <User className="w-5 h-5 text-muted-foreground" />
+                  {m.role === 'user' && (
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                      <User className="h-5 w-5" />
                     </div>
                   )}
                 </div>
               ))}
+
               {isLoading && (
-                <div className="flex items-start gap-3 justify-start">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                      <Logo className="w-5 h-5" />
-                    </div>
-                  <div className="p-3 rounded-lg bg-muted flex items-center">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/>
-                  </div>
+                <div className="flex gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
               )}
             </div>
           </ScrollArea>
-        </div>
-        <div className="p-4 border-t">
-          <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+
+          <form
+            onSubmit={handleSendMessage}
+            className="flex gap-2 p-4 border-t"
+          >
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type your message..."
-              disabled={isLoading || !activeSessionId || messagesLoading}
             />
-            <Button type="submit" size="icon" disabled={isLoading || !input.trim() || !activeSessionId || messagesLoading}>
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+            <Button type="submit" size="icon">
+              <Send className="h-4 w-4" />
             </Button>
           </form>
         </div>
       </div>
-    </div>
-  )
+    </AppLayout>
+  );
 }

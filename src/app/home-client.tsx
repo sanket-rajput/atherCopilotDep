@@ -1,21 +1,20 @@
 'use client';
 
-import { useUser } from '@/firebase';
-import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+import { useFirebaseAuth } from '@/firebase';
 
 export default function HomeClient() {
-  const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const auth = useFirebaseAuth();
 
   useEffect(() => {
-    if (!isUserLoading) {
-      if (user) {
-        router.replace('/dashboard');
-      }
-      // ❌ REMOVE redirect to /login
-    }
-  }, [user, isUserLoading, router]);
+    const unsub = onAuthStateChanged(auth, (user) => {
+      router.replace(user ? '/dashboard' : '/login');
+    });
+    return () => unsub();
+  }, [auth, router]);
 
   return null;
 }
