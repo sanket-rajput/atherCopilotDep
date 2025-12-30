@@ -1,0 +1,170 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict user-ownership model. All user-generated
+ * content is stored in subcollections under that user's specific document. Access is
+ * granted if, and only if, the requesting user's authenticated UID matches the {userId}
+ * parameter in the document path. This ensures users can only ever access their own data.
+ *
+ * Data Structure: All data is hierarchically organized under a top-level `/users` collection.
+ * Each user has a root document at `/users/{userId}`, and all their related data, such as
+ * sessions, messages, code snippets, and study notes, are stored in subcollections within
+ * that user's document tree.
+ *
+ * Key Security Decisions:
+ * - Listing Users Disallowed: The top-level `/users` collection is not listable, preventing
+ *   any user from discovering other users in the system.
+ * - Strict Path-Based Ownership: Authorization relies solely on the document path. This
+ *   avoids costly and complex `get()` or `exists()` calls to other documents for authorization.
+ * - Default Deny: All operations are denied by default and are only explicitly allowed
+ *   through specific rules based on user ownership.
+ * - Relational Integrity: On document creation, rules validate that the `userId` field within
+ *   the document's data matches the `userId` in the path, ensuring data consistency.
+ *   This `userId` field is immutable on update.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the cornerstone of the user-ownership model.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * For update and delete operations, ensures the user is the owner AND the document
+     * already exists. Prevents modification of non-existent data.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates required ownership fields during the creation of a User document.
+     * Ensures the document's ID is consistent with the user's auth UID.
+     */
+    function isValidUserCreate(userId) {
+      let data = request.resource.data;
+      return data.id == userId;
+    }
+
+    /**
+     * Enforces immutability of critical relational fields for a User document on update.
+     */
+    function isImmutableUserUpdate() {
+      let data = request.resource.data;
+      return data.id == resource.data.id
+          && data.clerkId == resource.data.clerkId;
+    }
+    
+    /**
+     * Validates required ownership fields for user-owned content upon creation.
+     */
+    function isValidOwnedContentCreate(userId) {
+      return request.resource.data.userId == userId;
+    }
+    
+    /**
+     * Ensures the ownership link is not changed on update for any user-owned content.
+     */
+    function isImmutableOwnedContentUpdate() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Manages user profile documents.
+     * @path /users/{userId}
+     * @allow (create) A new user creating their own profile document.
+     * @deny (list) Any user attempting to list all user profiles.
+     * @principle A user can create their own profile, can only read/write their own
+     * profile, and cannot discover other users.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // CRITICAL: Prevent listing of all users.
+      allow create: if isOwner(userId) && isValidUserCreate(userId);
+      allow update: if isExistingOwner(userId) && isImmutableUserUpdate();
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Manages chat sessions owned by a specific user.
+       * @path /users/{userId}/sessions/{sessionId}
+       * @allow (get, list, create, update, delete) A user managing their own chat sessions.
+       * @deny (get) Another user attempting to read a user's session.
+       * @principle Enforces strict ownership. All session operations are restricted to the
+       * user who owns the data tree, as defined by the path.
+       */
+      match /sessions/{sessionId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidOwnedContentCreate(userId);
+        allow update: if isExistingOwner(userId) && isImmutableOwnedContentUpdate();
+        allow delete: if isExistingOwner(userId);
+
+        /**
+         * @description Manages chat messages within a user's session.
+         * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
+         * @allow (create) A user sending a message in one of their own sessions.
+         * @deny (list) User 'B' attempting to list messages in User 'A's session.
+         * @principle Access is inherited from the top-level {userId} in the path, ensuring
+         * only the owner of the session can access its messages.
+         */
+        match /messages/{messageId} {
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId);
+          allow create: if isOwner(userId) && isValidOwnedContentCreate(userId);
+          allow update: if isExistingOwner(userId) && isImmutableOwnedContentUpdate();
+          allow delete: if isExistingOwner(userId);
+        }
+      }
+
+      /**
+       * @description Manages code snippets generated by a user.
+       * @path /users/{userId}/codeSnippets/{codeSnippetId}
+       * @allow (create, update) A user saving or modifying their own code snippet.
+       * @deny (delete) User 'B' attempting to delete User 'A's snippet.
+       * @principle Restricts access to a user's own data tree, ensuring personal code
+       * snippets remain private.
+       */
+      match /codeSnippets/{codeSnippetId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidOwnedContentCreate(userId);
+        allow update: if isExistingOwner(userId) && isImmutableOwnedContentUpdate();
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Manages study notes created by a user.
+       * @path /users/{userId}/studyNotes/{studyNoteId}
+       * @allow (get, list) A user reading or listing their own study notes.
+       * @deny (get) An unauthenticated user attempting to read any study note.
+       * @principle Enforces strict ownership for personal study materials, ensuring
+       * privacy and control over a user's own data.
+       */
+      match /studyNotes/{studyNoteId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidOwnedContentCreate(userId);
+        allow update: if isExistingOwner(userId) && isImmutableOwnedContentUpdate();
+        allow delete: if isExistingOwner(userId);
+      }
+    }
+  }
+}

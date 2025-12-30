@@ -1,0 +1,16 @@
+{
+  "name": "Aether Co-Pilot",
+  "short_name": "Aether",
+  "description": "An AI-powered desktop assistant to improve productivity, learning, and security on a PC.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0F4F8",
+  "theme_color": "#2C3E50",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

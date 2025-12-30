@@ -1,0 +1,286 @@
+
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Aether Co-Pilot application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "clerkId": {
+          "type": "string",
+          "description": "Clerk ID associated with the user for authentication."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user account was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user account was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email"
+      ]
+    },
+    "ChatMessage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ChatMessage",
+      "type": "object",
+      "description": "Represents a chat message within the Cognitive Memory Core.",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The content of the chat message."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the message was sent.",
+          "format": "date-time"
+        },
+        "isUserMessage": {
+          "type": "boolean",
+          "description": "Indicates whether the message was sent by the user or the AI assistant."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who sent the message."
+        }
+      },
+      "required": [
+        "content",
+        "createdAt",
+        "isUserMessage",
+        "userId"
+      ]
+    },
+    "Session": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Session",
+      "type": "object",
+      "description": "Represents a chat session with the AI assistant.",
+      "properties": {
+        "startTime": {
+          "type": "string",
+          "description": "Timestamp indicating when the session started.",
+          "format": "date-time"
+        },
+        "sessionName": {
+          "type": "string",
+          "description": "The name of the session given by the user."
+        }
+      },
+      "required": [
+        "startTime",
+        "sessionName"
+      ]
+    },
+    "CodeSnippet": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CodeSnippet",
+      "type": "object",
+      "description": "Represents a generated code snippet from Quantum CodeForge™.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the code snippet."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who generated the code. (Relationship: User 1:N CodeSnippet)"
+        },
+        "code": {
+          "type": "string",
+          "description": "The generated code snippet."
+        },
+        "language": {
+          "type": "string",
+          "description": "The programming language of the code snippet."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the code snippet was generated.",
+          "format": "date-time"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what the code snippet does."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "code",
+        "language",
+        "createdAt"
+      ]
+    },
+    "StudyNote": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StudyNote",
+      "type": "object",
+      "description": "Represents a study note created within Knowledge Navigator™.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the study note."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who created the note. (Relationship: User 1:N StudyNote)"
+        },
+        "content": {
+          "type": "string",
+          "description": "The content of the study note (e.g., summary, answers)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the study note was created.",
+          "format": "date-time"
+        },
+        "sourceDocument": {
+          "type": "string",
+          "description": "URI of the document that the study note is based on.",
+          "format": "uri"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags for the study note",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "content",
+        "createdAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Path-based ownership is enforced.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/sessions/{sessionId}",
+        "definition": {
+          "entityName": "Session",
+          "schema": {
+            "$ref": "#/backend/entities/Session"
+          },
+          "description": "Stores chat sessions for each user. Path-based ownership ensures only the user can access their sessions.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier for the chat session."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/sessions/{sessionId}/messages/{messageId}",
+        "definition": {
+          "entityName": "ChatMessage",
+          "schema": {
+            "$ref": "#/backend/entities/ChatMessage"
+          },
+          "description": "Stores chat messages within a session. Continues the path-based ownership from sessions.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier for the chat session."
+            },
+            {
+              "name": "messageId",
+              "description": "The unique identifier for the chat message."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/codeSnippets/{codeSnippetId}",
+        "definition": {
+          "entityName": "CodeSnippet",
+          "schema": {
+            "$ref": "#/backend/entities/CodeSnippet"
+          },
+          "description": "Stores code snippets generated by the user. Ensures only the user can access their code snippets.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "codeSnippetId",
+              "description": "The unique identifier for the code snippet."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/studyNotes/{studyNoteId}",
+        "definition": {
+          "entityName": "StudyNote",
+          "schema": {
+            "$ref": "#/backend/entities/StudyNote"
+          },
+          "description": "Stores study notes created by the user. Ensures only the user can access their study notes.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "studyNoteId",
+              "description": "The unique identifier for the study note."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+
+    
