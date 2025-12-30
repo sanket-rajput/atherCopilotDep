@@ -3,6 +3,6 @@ export const runtime = 'nodejs';
 
 import HomeClient from './home-client';
 
-export default function HomePage() {
+export default function Page() {
   return <HomeClient />;
 }
