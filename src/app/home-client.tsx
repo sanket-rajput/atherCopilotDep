@@ -10,7 +10,10 @@ export default function HomeClient() {
 
   useEffect(() => {
     if (!isUserLoading) {
-      router.replace(user ? '/dashboard' : '/login');
+      if (user) {
+        router.replace('/dashboard');
+      }
+      // ❌ REMOVE redirect to /login
     }
   }, [user, isUserLoading, router]);
 
