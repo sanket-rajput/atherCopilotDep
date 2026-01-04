@@ -2,19 +2,17 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
-import { useFirebaseAuth } from '@/firebase';
+import { useUser } from '@clerk/nextjs';
 
 export default function HomeClient() {
   const router = useRouter();
-  const auth = useFirebaseAuth();
+  const { isLoaded, isSignedIn } = useUser();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      router.replace(user ? '/dashboard' : '/login');
-    });
-    return () => unsub();
-  }, [auth, router]);
+    if (isLoaded) {
+      router.replace(isSignedIn ? '/chat' : '/login');
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   return null;
 }

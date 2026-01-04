@@ -9,7 +9,8 @@ type Message = {
 
 export async function chatAction(
   message: string,
-  chatHistory: Message[]
+  chatHistory: Message[],
+  mode?: 'general' | 'coding' | 'cognitive' | 'knowledge' | 'task'
 ) {
   if (!message || !Array.isArray(chatHistory)) {
     throw new Error('Invalid payload');
@@ -18,6 +19,7 @@ export async function chatAction(
   const result = await intelligentChatMemory({
     message,
     chatHistory,
+    mode,
   });
 
   return {

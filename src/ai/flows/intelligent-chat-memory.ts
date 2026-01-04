@@ -21,6 +21,10 @@ const IntelligentChatMemoryInputSchema = z.object({
     .array(ChatMessageSchema)
     .optional()
     .describe('Previous conversation messages.'),
+  mode: z
+    .enum(['general', 'coding', 'cognitive', 'knowledge', 'task'])
+    .optional()
+    .describe('Operational mode to tailor assistant behavior.'),
 });
 
 export type IntelligentChatMemoryInput = z.infer<
@@ -48,12 +52,22 @@ const prompt = ai.definePrompt({
           isUser: z.boolean(),
         })
       ),
+      mode: z.string().optional(),
     }),
   },
   output: { schema: IntelligentChatMemoryOutputSchema },
   prompt: `
 You are a helpful, intelligent AI assistant.
 Use the chat history to maintain context.
+
+Mode: {{mode}}
+
+Behavior guidance:
+- If Mode is 'coding': act as a coding assistant. Provide runnable code snippets, explain design decisions, and include tests or examples when helpful.
+- If Mode is 'cognitive': focus on memory, summarization, and recalling prior details from the conversation.
+- If Mode is 'knowledge': prioritize factual answers and provide sources or citations where possible.
+- If Mode is 'task': provide step-by-step actionable plans, checklists, and commands the user can run to automate tasks.
+- Otherwise, be general and concise.
 
 Chat History:
 {{#each chatHistory}}

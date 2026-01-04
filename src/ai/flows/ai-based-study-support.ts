@@ -58,19 +58,22 @@ const studyAssistantFlow = ai.defineFlow(
     outputSchema: StudyAssistantOutputSchema,
   },
   async input => {
-    const {output: {requiresSummary}} = await requiresSummaryPrompt(input);
+      const requiresResp = await requiresSummaryPrompt(input);
+    const requiresSummary = requiresResp?.output?.requiresSummary ?? false;
 
     let summary: string | undefined = undefined;
     if (requiresSummary) {
-      const {output: {summary: generatedSummary}} = await summaryPrompt(input);
+      const summaryResp = await summaryPrompt(input);
+      const generatedSummary = summaryResp?.output?.summary ?? undefined;
       summary = generatedSummary;
     }
 
-    const {output: {answer}} = await answerPrompt({
+    const answerResp = await answerPrompt({
       query: input.query,
       document: input.document,
       summary,
     });
+    const answer = answerResp?.output?.answer ?? '';
 
     return {
       answer,

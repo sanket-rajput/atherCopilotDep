@@ -37,7 +37,8 @@ export default function CodeGeneratorPage() {
   const [hasCopied, setHasCopied] = useState(false);
 
   const { toast } = useToast();
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // Use a loose 'any' type here to avoid lib.dom type dependency for SpeechRecognition
+  const recognitionRef = useRef<any>(null);
 
   /* 🎙 Speech Recognition Setup */
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function CodeGeneratorPage() {
     recognition.continuous = true;
     recognition.interimResults = true;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       let finalTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
@@ -119,12 +120,39 @@ export default function CodeGeneratorPage() {
     }
   };
 
-  const handleCopy = () => {
-    if (codeSnippet) {
-      navigator.clipboard.writeText(codeSnippet);
+  const handleCopy = async () => {
+    if (!codeSnippet) return;
+
+    try {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === 'function'
+      ) {
+        await navigator.clipboard.writeText(codeSnippet);
+      } else {
+        // Fallback for environments without Clipboard API
+        const el = document.createElement('textarea');
+        el.value = codeSnippet;
+        el.setAttribute('readonly', '');
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+
       setHasCopied(true);
       toast({ title: 'Code copied to clipboard!' });
       setTimeout(() => setHasCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy failed', err);
+      toast({
+        title: 'Copy failed',
+        description: 'Unable to copy to clipboard',
+        variant: 'destructive',
+      });
     }
   };
 

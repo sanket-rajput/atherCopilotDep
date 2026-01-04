@@ -25,15 +25,13 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 import {
-  useAuth,
   useCollection,
   useFirebase,
-  useUser,
   useMemoFirebase,
-  initiateAnonymousSignIn,
   addDocumentNonBlocking,
   deleteDocumentNonBlocking,
 } from '@/firebase';
+import { useUser as useClerkUser, SignInButton } from '@clerk/nextjs';
 
 import {
   collection,
@@ -53,27 +51,26 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [mode, setMode] = useState<'general' | 'coding' | 'cognitive' | 'knowledge' | 'task'>('general');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const { firestore } = useFirebase();
-  const { user, isUserLoading } = useUser();
-  const auth = useAuth();
+  const { isLoaded, isSignedIn, user } = useClerkUser();
 
-  /* 🔐 Anonymous login */
+  /* 🔐 Require Clerk sign-in instead of anonymous sign-in */
   useEffect(() => {
-    if (!user && !isUserLoading) {
-      initiateAnonymousSignIn(auth);
-    }
-  }, [user, isUserLoading, auth]);
+    // If Clerk is loaded and user is not signed in, we could prompt sign-in UI.
+    // The UI below will show a SignIn button when not signed in.
+  }, [isLoaded, isSignedIn]);
 
   /* 📂 Sessions */
   const sessionsQuery = useMemoFirebase(
     () =>
       user
         ? query(
-            collection(firestore, `users/${user.uid}/sessions`),
+            collection(firestore, `users/${user?.id}/sessions`),
             orderBy('startTime', 'desc')
           )
         : null,
@@ -89,7 +86,7 @@ export default function ChatPage() {
         ? query(
             collection(
               firestore,
-              `users/${user.uid}/sessions/${activeSessionId}/messages`
+              `users/${user?.id}/sessions/${activeSessionId}/messages`
             ),
             orderBy('createdAt')
           )
@@ -128,7 +125,7 @@ export default function ChatPage() {
   /* ➕ New session */
   const handleNewSession = async () => {
     if (!user) return;
-    const ref = collection(firestore, `users/${user.uid}/sessions`);
+    const ref = collection(firestore, `users/${user?.id}/sessions`);
     const docRef = await addDocumentNonBlocking(ref, {
       startTime: serverTimestamp(),
       sessionName: `New Chat ${(sessions?.length ?? 0) + 1}`,
@@ -140,7 +137,7 @@ export default function ChatPage() {
   const handleDeleteSession = async (id: string) => {
     if (!user) return;
     await deleteDocumentNonBlocking(
-      doc(firestore, `users/${user.uid}/sessions`, id)
+      doc(firestore, `users/${user?.id}/sessions`, id)
     );
     if (id === activeSessionId) setActiveSessionId(null);
   };
@@ -159,7 +156,7 @@ export default function ChatPage() {
 
     const ref = collection(
       firestore,
-      `users/${user.uid}/sessions/${activeSessionId}/messages`
+      `users/${user?.id}/sessions/${activeSessionId}/messages`
     );
 
     await addDocumentNonBlocking(ref, {
@@ -169,12 +166,19 @@ export default function ChatPage() {
     });
 
     try {
-      const cleanHistory = [...messages, userMessage].map((m) => ({
+      // Build authoritative history from Firestore if available, otherwise fall back to local `messages` state
+      const baseHistory: Message[] =
+        (firestoreMessages?.map((m) => ({
+          role: (m.isUserMessage ? 'user' : 'assistant') as Message['role'],
+          content: m.content,
+        })) as Message[]) ?? messages;
+
+      const cleanHistory: Message[] = [...baseHistory, userMessage].map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      const result = await chatAction(content, cleanHistory);
+      const result = await chatAction(content, cleanHistory, mode);
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -247,12 +251,41 @@ export default function ChatPage() {
         </aside>
 
         {/* Chat */}
+        {/* If Clerk is loaded and user is not signed in, prompt to sign in */}
+        {isLoaded && !isSignedIn && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <p className="mb-4">Please sign in to access your persistent chat memory.</p>
+              <SignInButton>
+                <button className="btn">Sign in / Create account</button>
+              </SignInButton>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col flex-1">
-          <div className="border-b p-4">
-            <PageHeader
-              title="Cognitive Memory Core™"
-              description="AI chat with persistent memory."
-            />
+          <div className="border-b p-4 flex items-center justify-between gap-4">
+            <div>
+              <PageHeader
+                title="Ather Co-pilot™"
+                description="AI chat with persistent memory."
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Mode</label>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as any)}
+                className="rounded-md border px-2 py-1 bg-card text-sm"
+              >
+                <option value="general">General</option>
+                <option value="coding">Coding</option>
+                <option value="cognitive">Cognitive Memory</option>
+                <option value="knowledge">Knowledge</option>
+                <option value="task">Task Automator</option>
+              </select>
+            </div>
           </div>
 
           <ScrollArea ref={scrollRef} className="flex-1 p-4">

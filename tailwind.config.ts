@@ -41,6 +41,12 @@ export default {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
         },
+        /* Brand colors as explicit hex fallbacks */
+        brand: {
+          primary: '#2C3E50',
+          accent: '#8E44AD',
+          background: '#F0F4F8',
+        },
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',

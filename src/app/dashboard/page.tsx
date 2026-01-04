@@ -18,7 +18,10 @@ import {
   CodeXml,
   MessageCircle,
   Sparkles,
+  Mic,
 } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 
 const features = [
   {
@@ -52,33 +55,111 @@ const features = [
 ];
 
 export default function DashboardPage() {
+  const { user } = useUser();
+  const router = useRouter();
+
+  const quickActions = [
+    { label: 'Deep Research', mode: 'knowledge' },
+    { label: 'Create video', mode: 'general' },
+    { label: 'Create image', mode: 'general' },
+    { label: 'Help me learn', mode: 'cognitive' },
+    { label: 'Explore visually', mode: 'general' },
+  ];
+
+  const onQuickAction = (mode: string, prompt?: string) => {
+    const q = new URLSearchParams();
+    q.set('mode', mode);
+    if (prompt) q.set('prompt', prompt);
+    router.push(`/chat?${q.toString()}`);
+  };
+
   return (
     <div className="space-y-12">
-      {/* 🌌 Hero */}
-      <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-primary/10 via-background to-background p-10">
-        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-secondary/20 blur-3xl" />
+      {/* Gemini-like Hero */}
+      <div className="relative rounded-2xl p-8 bg-card border">
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex-1">
+            <p className="text-sm text-muted-foreground">{user ? `✨ Hi ${user.firstName || 'there'}` : '✨ Hi'}</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">
+              Happy New Year! Let’s make it your best yet
+            </h1>
 
-        <div className="relative space-y-4">
-          <div className="flex items-center gap-2 text-primary">
-            <Sparkles className="h-5 w-5" />
-            <span className="text-sm font-semibold uppercase tracking-wider">
-              Aether Co-Pilot
-            </span>
+            <p className="mt-3 text-muted-foreground max-w-2xl">
+              Ask Aether Co-Pilot anything — deep research, code generation, knowledge lookups, or run automations.
+            </p>
+
+            {/* Search bar */}
+            <div className="mt-6 flex items-center gap-4">
+              <div className="flex items-center flex-1 gap-3 rounded-full bg-background p-3 shadow-sm">
+                <button
+                  className="rounded-md px-3 py-1 text-sm font-medium border bg-card"
+                  aria-label="tools"
+                >
+                  Tools
+                </button>
+
+                <input
+                  className="flex-1 bg-transparent outline-none text-lg"
+                  placeholder="Ask Aether Co-Pilot"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = (e.target as HTMLInputElement).value;
+                      if (val.trim()) {
+                        const q = new URLSearchParams();
+                        q.set('prompt', val);
+                        router.push(`/chat?${q.toString()}`);
+                      }
+                    }
+                  }}
+                />
+
+                <select className="rounded-md border bg-card px-2 py-1 text-sm">
+                  <option>Fast</option>
+                </select>
+
+                <button className="rounded-full bg-primary/10 p-2 text-primary" aria-label="voice">
+                  <Mic className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick action chips */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {quickActions.map((a) => (
+                <button
+                  key={a.label}
+                  onClick={() => onQuickAction(a.mode, a.label)}
+                  className="rounded-full bg-muted/40 px-3 py-1 text-sm"
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-            Your AI Control Center
-          </h1>
+          {/* Right side: small app quick summary */}
+          <div className="hidden w-64 flex-col gap-4 md:flex">
+            <div className="rounded-md border bg-card p-4">
+              <h4 className="text-sm font-semibold">Quick Links</h4>
+              <div className="mt-3 space-y-2">
+                {features.slice(0, 4).map((f) => (
+                  <Link key={f.href} href={f.href} className="flex items-center gap-2 text-sm">
+                    <f.icon className="h-4 w-4 text-primary" />
+                    <span>{f.title}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
 
-          <p className="max-w-2xl text-muted-foreground">
-            Build faster, learn smarter, and automate effortlessly with your
-            all-in-one AI desktop assistant.
-          </p>
+            <div className="rounded-md border bg-card p-4">
+              <h4 className="text-sm font-semibold">Usage</h4>
+              <p className="mt-2 text-sm text-muted-foreground">Sessions, saved prompts, and recent automations will appear here.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* 🚀 Feature Grid */}
+      {/* Feature Grid (kept) */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {features.map((feature) => {
           const Icon = feature.icon;
